@@ -1,21 +1,35 @@
+"""Interpret the single-character Turtle Script language."""
 import turtle
-import tkinter.filedialog as tk
-commands = {
-    "F": turtle.forward,
-    "B": turtle.backward,
-    "+": turtle.right,
-    "-": turtle.left,
-    "[": turtle.penup,
-    "]": turtle.pendown,
-    "M": turtle.mainloop
-}
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
-# Load in our program from a file
-app=tk.askopenfilename(filetypes=[(' Turtle Scripts','*.ts')])
-with open(app, "r") as f:
-    program = f.read()
 
-# Run the program by iterating through each character and running the corresponding command
-for char in program:
-    if char in commands:
-        commands[char](10)
+def run_program(program, target=turtle):
+    commands = {'F': lambda: target.forward(10), 'B': lambda: target.backward(10),
+                '+': lambda: target.right(10), '-': lambda: target.left(10),
+                '[': target.penup, ']': target.pendown, 'M': target.mainloop}
+    for char in program:
+        if char in commands:
+            commands[char]()
+
+
+def main():
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        path = filedialog.askopenfilename(parent=root, filetypes=[('Turtle scripts', '*.ts')])
+        if not path:
+            return
+        try:
+            with open(path, encoding='utf-8') as file:
+                program = file.read()
+        except (OSError, UnicodeError) as exc:
+            messagebox.showerror('Open failed', str(exc), parent=root)
+            return
+        run_program(program)
+    finally:
+        root.destroy()
+
+
+if __name__ == '__main__':
+    main()

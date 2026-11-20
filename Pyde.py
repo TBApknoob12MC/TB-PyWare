@@ -1,90 +1,121 @@
-from tkinter import*
-from tkinter.filedialog import*
-from subprocess import Popen,PIPE
-def run(com):
-    xm=Popen(com,stdin=PIPE,stdout=PIPE,stderr=PIPE,shell=True)
-    out,err=xm.communicate()
-    cout.insert(0.0,out)
-    cout.insert(0.0,err)
-PyDE = Tk()
-t = 'new'
-PyDE.title(t+"-PyDE By Testbot")
-temp=''
-def tit(s):
-    global t
-    t=s   
-    PyDE.title(t+"-PyDE By Testbot")
-def Openfile():
-        p=askopenfilename(filetypes=[('Python Files','*.py'),('HTML Files','*.html'),('Turtle Scripts','*.ts')])
-        with open(p,'r') as file:
-            code=file.read()
-            IOsys.delete('1.0',END)
-            IOsys.insert('1.0',code)
-            global temp
-            temp=p
-            tit(p) 
-def Save():
-        p=asksaveasfilename(filetypes=[('Python Files','*.py'),('HTML Files','*.html'),(' Turtle Scripts','*.ts')])
-        with open(p,'w') as file:
-            code=IOsys.get('1.0',END)
-            file.write(code)
-            global temp
-            temp=p
-            tit(p)    
-def info():
-    try:
-        with open('Pyde-Linux.py','r') as file:
-            code=file.read()
-            IOsys.delete('1.0',END)
-            IOsys.insert('1.0',code)
-            global temp
-            temp='/home/user/Desktop/ICT/vspc/Pyde-Linux.py'
-            tit(temp)
-    except:
-        pass        
-def clear():
-        IOsys.delete('1.0',END)
-def execute():
-        if temp=='':
-            fo=Toplevel()
-            fo.title("comfig save!")
-            Label(fo,text="save your code please!!!!!!!!!!").pack()
-            Button(fo,text="ok",command=exit)    
-        else:
-            if TRUE:
-                if 'input()'  in IOsys.get(0.0,END):
-                    a= IOsys.get(0.0,END)
-                    exec(a) 
-                else:
-                    if '.py' in temp:
-                        com=f'python {temp}'
-                    run(com)
-                   
-def ter():
-   
-    ssx=Tk()
-    ssx.title("terminal(python || bash)")
-    def ccx():
-        ax=a.get()
-        run(ax)
-    a=Entry(ssx)
-    a.pack()
-    but=Button(ssx,text="run",command=ccx)
-    but.pack()
-top=Menu(PyDE)
-executer=Menu(top)
-executer.add_command(label="execute ",command=execute)
-executer.add_command(label="clear all ",command=clear)
-executer.add_command(label="Open",command=Openfile)
-executer.add_command(label="Save",command=Save)
-executer.add_command(label="terminal",command=ter)
-executer.add_command(label="SRC code here",command=info)
-executer.add_command(label="close PyDE(your code will be lost!)",command=exit)
-top.add_cascade(label="IO System",menu=executer)
-PyDE.config(menu=top)
-IOsys=Text(PyDE,height=20,width=100)
-IOsys.pack()
-cout=Text(PyDE,height=12,width=100)
-cout.pack()
-cout.insert('1.0','')
-PyDE.mainloop()   
+"""A small editor for Python, HTML and Turtle Script files."""
+import sys
+import re
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from pathlib import Path
+
+from process_runner import run_process
+from completion import complete
+
+
+def main():
+    root = tk.Tk()
+    root.title('new - PyDE')
+    path = None
+    editor = tk.Text(root, height=20, width=100, undo=True)
+    editor.pack()
+    output = tk.Text(root, height=12, width=100)
+    output.pack()
+
+    def confirm_discard():
+        return not editor.edit_modified() or messagebox.askyesno(
+            'Unsaved changes', 'Discard unsaved changes?', parent=root)
+
+    def open_file():
+        nonlocal path
+        if not confirm_discard():
+            return
+        selected = filedialog.askopenfilename(parent=root, filetypes=[('Supported files', '*.py *.html *.ts'), ('All files', '*')])
+        if not selected:
+            return
+        try:
+            text = Path(selected).read_text(encoding='utf-8')
+        except (OSError, UnicodeError) as exc:
+            messagebox.showerror('Open failed', str(exc), parent=root)
+            return
+        editor.delete('1.0', 'end')
+        editor.insert('1.0', text)
+        editor.edit_modified(False)
+        path = selected
+        root.title(f'{path} - PyDE')
+
+    def save():
+        nonlocal path
+        selected = filedialog.asksaveasfilename(parent=root, initialfile=Path(path).name if path else '',
+            filetypes=[('Python files', '*.py'), ('HTML files', '*.html'), ('Turtle scripts', '*.ts'), ('All files', '*')])
+        if not selected:
+            return False
+        try:
+            Path(selected).write_text(editor.get('1.0', 'end-1c'), encoding='utf-8')
+        except (OSError, UnicodeError) as exc:
+            messagebox.showerror('Save failed', str(exc), parent=root)
+            return False
+        path = selected
+        editor.edit_modified(False)
+        root.title(f'{path} - PyDE')
+        return True
+
+    def execute():
+        if not path or editor.edit_modified():
+            if not messagebox.askyesno('Save required', 'Save the current code before running?', parent=root) or not save():
+                return
+        if Path(path).suffix.lower() != '.py':
+            messagebox.showerror('Cannot run', 'Only Python files can be run here.', parent=root)
+            return
+        run_process(output, [sys.executable, path])
+
+    def show_completion(event=None):
+        before = editor.get('1.0', 'insert')
+        match = re.search(r'[A-Za-z_][A-Za-z_0-9]*$', before)
+        if not match:
+            return 'break'
+        prefix = match.group()
+        options = complete(editor.get('1.0', 'end-1c'), prefix)
+        if not options:
+            root.bell()
+            return 'break'
+        menu = tk.Menu(root, tearoff=False)
+        def insert(word):
+            # Avoid replacing text if the cursor or prefix changed while the menu was open.
+            current = editor.get('insert - %d chars' % len(prefix), 'insert')
+            if current == prefix:
+                editor.delete('insert - %d chars' % len(prefix), 'insert')
+                editor.insert('insert', word)
+        for word in options[:30]:
+            menu.add_command(label=word, command=lambda word=word: insert(word))
+        menu.bind('<Unmap>', lambda event: menu.after_idle(menu.destroy))
+        coords = editor.bbox('insert')
+        x = editor.winfo_rootx() + (coords[0] if coords else 0)
+        y = editor.winfo_rooty() + (coords[1] + coords[3] if coords else 0)
+        menu.tk_popup(x, y)
+        return 'break'
+
+    editor.bind('<Control-space>', show_completion)
+
+    def terminal():
+        window = tk.Toplevel(root)
+        window.title('Terminal (shell commands)')
+        tk.Label(window, text='Commands execute in your system shell; interactive input is not supported.').pack()
+        entry = tk.Entry(window, width=70)
+        entry.pack()
+        tk.Button(window, text='Run', command=lambda: run_process(output, entry.get(), shell=True)).pack()
+
+    def close():
+        if confirm_discard():
+            root.destroy()
+
+    menu = tk.Menu(root)
+    actions = tk.Menu(menu, tearoff=False)
+    for label, command in [('Execute', execute), ('Clear all', lambda: editor.delete('1.0', 'end')),
+                           ('Open', open_file), ('Save as', save), ('Complete (Ctrl+Space)', show_completion), ('Terminal', terminal), ('Close', close)]:
+        actions.add_command(label=label, command=command)
+    menu.add_cascade(label='IO System', menu=actions)
+    root.config(menu=menu)
+    root.protocol('WM_DELETE_WINDOW', close)
+    editor.edit_modified(False)
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()

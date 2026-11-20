@@ -1,83 +1,92 @@
-from tkinter import*
-from tkinter. filedialog import*
-from tkinter. messagebox import*
-from tkinter. scrolledtext import*
+"""Entry point for the TB-PyWare launcher."""
+import sys
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from pathlib import Path
+
 import app
-import os
-from subprocess import Popen,PIPE
-def subber(doing):
-	xm=Popen(doing,stdin=PIPE,stdout=PIPE,stderr=PIPE,shell=True)
-	out,err=xm.communicate()
-	ai.insert(0.0,out)
-	ai.insert(0.0,err)
-def apper():
-	dupe=askopenfilename(filetypes=[('Python Files','*.py')])
-	python=f'python {dupe}'
-	subber(python)
-	with open(dupe,'r') as r:
-		nex=r.read()
-		exec(nex)
+import audio_player
+import games
+from process_runner import run_process
 
-def edit():
-	app. mainy()
-gos=Tk()
-gos. title("version- 2023.1")
-menu=Menu(gos)
-prog=Menu(menu)
-write=Menu(prog)
-def exrt():
-	ad=askyesno(title="-Shut Down", message="Shut Down the computer?")
-	if ad:
-		gos. destroy()
 
-def con():
-	app.mainz()
-def setui():
-	def exec():
-		a.configure(text="")
-		abc.insert(0,"Welcome to -version- 2023.1")
-	def exe():
-		aw=abc. get()
-		xy. configure(text=aw)
-		with open('xy.txt','w') as f:
-			f. write(aw)
-			f. close()
-		app. destroy()
-	def ext():
-		aw=abc. get()
-		a. configure(text="look like: "+aw)
-	app=Toplevel()
-	app. title("setup")
-	a=Label(app, text="Set the OS")
-	a. pack()
-	abc=Entry(app)
-	abc. pack()
-	Button(app, text="Set", command=ext). pack()
-	Button(app, text="apply", command=exe). pack()
-	Button(app, text="Reset", command=exec). pack()
-def ccc():
-	app.cco()
-def cal():
-	app. mainx()
-def writer():
-	app.maina()
-prog. add_cascade(label="System Apps", menu=write)
-write. add_command(label="HtmEdit", command=edit)
-write.add_command(label="GClock",command=ccc)
-write. add_command(label="PyConsole", command=con)
-write. add_command(label="Calculator", command=cal)
-write. add_command(label="FunWriter", command=writer)
-write. add_command(label="Shut Down", command=exrt)
-write. add_command(label="Setup", command=setui)
-write.add_command(label="softlauncher",command=apper)
-menu. add_cascade(label="<LAUNCH>", menu=prog)
-gos. config(menu=menu)
-xy=Label(gos, text="Welcome to os")
-xy. pack()
-if os.path.isfile('xy.txt'):
-	with open('xy.txt','r') as f:
-		text=f. read()
-		xy. configure(text=text)
-ai=Text(gos)
-ai.pack()		
-gos. mainloop()
+def main():
+    root = tk.Tk()
+    root.title('TB-PyWare 2023.1')
+    background = tk.Label(root, borderwidth=0)
+    background.place(x=0, y=0, relwidth=1, relheight=1)
+    background.lower()
+    wallpaper = None
+    greeting = tk.Label(root, text='Welcome to OS')
+    greeting.pack()
+    output = tk.Text(root)
+    output.pack()
+    settings = Path('xy.txt')
+    try:
+        if settings.is_file():
+            greeting.config(text=settings.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError) as exc:
+        messagebox.showerror('Settings error', str(exc), parent=root)
+
+    def launch():
+        path = filedialog.askopenfilename(parent=root, filetypes=[('Python files', '*.py')])
+        if path:
+            run_process(output, [sys.executable, path])
+
+    def choose_wallpaper():
+        nonlocal wallpaper
+        path = filedialog.askopenfilename(parent=root, filetypes=[('PNG and GIF images', '*.png *.gif')])
+        if not path:
+            return
+        try:
+            image = tk.PhotoImage(master=root, file=path)
+        except tk.TclError as exc:
+            messagebox.showerror('Wallpaper failed', str(exc), parent=root)
+            return
+        wallpaper = image  # Keep a reference for Tk.
+        background.config(image=wallpaper)
+
+    def clear_wallpaper():
+        nonlocal wallpaper
+        background.config(image='')
+        wallpaper = None
+
+    def setup():
+        window = tk.Toplevel(root)
+        window.title('Setup')
+        tk.Label(window, text='Set the welcome message').pack()
+        entry = tk.Entry(window)
+        entry.insert(0, greeting.cget('text'))
+        entry.pack()
+        def apply():
+            text = entry.get()
+            try:
+                settings.write_text(text, encoding='utf-8')
+            except (OSError, UnicodeError) as exc:
+                messagebox.showerror('Settings error', str(exc), parent=window)
+                return
+            greeting.config(text=text)
+            window.destroy()
+        tk.Button(window, text='Apply', command=apply).pack()
+        tk.Button(window, text='Reset', command=lambda: (entry.delete(0, 'end'), entry.insert(0, 'Welcome to OS'))).pack()
+
+    def close():
+        if messagebox.askyesno('Exit', 'Close TB-PyWare?', parent=root):
+            root.destroy()
+
+    menu = tk.Menu(root)
+    programs = tk.Menu(menu, tearoff=False)
+    for label, command in [('HtmEdit', app.mainy), ('GClock', app.cco), ('PyConsole', app.mainz),
+                           ('Calculator', app.mainx), ('FunWriter', app.maina), ('Setup', setup),
+                           ('Softlauncher', launch), ('WAV player', audio_player.open_player),
+                           ('Guess the number', games.guessing_game), ('Tic-tac-toe', games.tic_tac_toe),
+                           ('Choose wallpaper', choose_wallpaper), ('Clear wallpaper', clear_wallpaper), ('Exit', close)]:
+        programs.add_command(label=label, command=command)
+    menu.add_cascade(label='Launch', menu=programs)
+    root.config(menu=menu)
+    root.protocol('WM_DELETE_WINDOW', close)
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()
